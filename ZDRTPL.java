@@ -12,7 +12,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
- * ZDRTPL class containing the model for the ZDRTPL problem
+ * ZDRTPL class containing the model for the SRTPL problem
  * 
  * @author 562606ad
  */
