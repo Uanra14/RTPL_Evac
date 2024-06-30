@@ -12,11 +12,11 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
- * Class for the Robust Transportation Planning with Demand Uncertainty (RTPL) model
+ * ZDRTPL class containing the model for the ZDRTPL problem
  * 
  * @author 562606ad
  */
-public class RTPL {
+public class ZDRTPL {
     public GRBModel model;
     public GRBEnv env;
 
@@ -31,9 +31,9 @@ public class RTPL {
     public int busCap;
     public int numDP;
     public int numSh;
-    public int pess;
     public int longestWalk;
     public int maxT;
+    public double parameter;
     public int[] shelterCap;
     public int[][] times;
     public int[][] walkingTimes;
@@ -41,24 +41,25 @@ public class RTPL {
     public List<Integer[]> selectedDemandVectors;
     
     /**
-     * Constructor for the RTPL model
-     * @param longestWalk Maximum walking distance
-     * @param maxT Maximum driving time for the buses
-     * @param times Travel times between demand points and shelters
-     * @param pess Degree of pessimism
+     * Constructor for the ZDRTPL class
+     * @param longestWalk Maximum allowed walking distance
+     * @param maxT Maximum allowed driving time for each bus
+     * @param times Times from demand points to shelters
      * @param walkingTimes Walking times between demand points
      * @param demandVectors List of the possible vectors of demand for each demand point
      * @param selectedDemandVectors List of selected demand vectors
      * @param shelterCap Array of shelter capacities
      * @param numBus Number of buses
      * @param busCap Capacity of each bus
+     * @param parameter Parameter for the ZDRTPL model
      */
-    public RTPL(int longestWalk, int maxT, int[][] times, int pess,
+    public ZDRTPL(int longestWalk, int maxT, int[][] times,
     int[][] walkingTimes, List<Integer[]> demandVectors, List<Integer[]> selectedDemandVectors, 
-    int[] shelterCap, int numBus, int busCap) {
+    int[] shelterCap, int numBus, int busCap, double parameter) {
 
         this.numDP = demandVectors.get(0).length;
         this.numSh = shelterCap.length;
+        this.parameter = parameter;
 
         // Decision Variables
         this.isPickUpLocation = new GRBVar[numDP];
@@ -72,7 +73,6 @@ public class RTPL {
         this.longestWalk = longestWalk;
         this.maxT = maxT;
         this.times = times;
-        this.pess = pess;
         this.walkingTimes = walkingTimes;
         this.demandVectors = demandVectors;
         this.selectedDemandVectors = selectedDemandVectors;
@@ -274,7 +274,7 @@ public class RTPL {
     }
 
     /**
-     * Solves the RTPL model
+     * Solve the model
      * @throws IOException
      * @throws GRBException
      */
@@ -283,18 +283,18 @@ public class RTPL {
     }
 
     /**
-     * Writes the RTPL model to an lp file
+     * Write the model to a file
      */
     public void write() {
         try {
-            this.model.write("RTPL_" + pess + ".lp");
+            this.model.write("ZDRTPL.lp");
         } catch (GRBException e) {
             e.printStackTrace();
         }
     }
     
     /**
-     * Writes the results of the RTPL model to an Excel file
+     * Write the results to an Excel file
      * @param duration Duration of the optimization process
      * @param count Number of the run
      * @throws GRBException
@@ -305,7 +305,7 @@ public class RTPL {
         Workbook workbook = new XSSFWorkbook();
 
         // Create a new sheet for the results
-        Sheet sheet = workbook.createSheet("Results_" + pess + "_" + count);
+        Sheet sheet = workbook.createSheet("Results_" + parameter + "_" + count);
 
         // Create a header row
         Row headerRow = sheet.createRow(0);
@@ -322,7 +322,6 @@ public class RTPL {
         int k = 0;
         int rowIndex = 1;
         int d = selectedDemandVectors.size() - 1;
-
         for (int b = 0; b < numBus; b++) {
             for (int i = 0; i < numDP; i++) {
                 if (busAllocation[b][i].get(GRB.DoubleAttr.X) == 1.0) {
@@ -348,7 +347,7 @@ public class RTPL {
             }
         }
         // Create a new Excel file
-        try (FileOutputStream fileOut = new FileOutputStream("RTPL_" + pess + "_" + count + "_Results.xlsx")) {
+        try (FileOutputStream fileOut = new FileOutputStream("ZDRTPL_" + parameter + "_" + count + "_Results.xlsx")) {
             workbook.write(fileOut);
         } catch (IOException e) {
             e.printStackTrace();
@@ -358,16 +357,16 @@ public class RTPL {
     }
 
     /**
-     * Disposes of the RTPL model
+     * Dispose of the model and environment
      * @throws GRBException
      */
     public void dispose() throws GRBException {
         model.dispose();
         env.dispose();
     }
-    
+
     /**
-     * Prints the results of the RTPL model
+     * Print the results of the model
      * @throws GRBException
      */
     public void printResults() throws GRBException {
@@ -388,24 +387,50 @@ public class RTPL {
     }
 
     /**
-     * Runs the RTPL model with demand uncertainty count times
+     * Runs the RTPL model with demand uncertainty 1 time for 1 parameter value
      * @param nominalDemand Array of nominal demand values
+     * @param lowDemand Array of low demand values
      * @param highDemand Array of high demand values
      * @param shelterCapacities Array of shelter capacities
      * @param walkingTimesPath Path to the walking times file
      * @param drivingTimesPath Path to the driving times file
-     * @param longestWalk Maximum walking distance
-     * @param maxT Maximum driving time for the buses
+     * @param longestWalk Maximum allowed walking distance
+     * @param maxT Maximum allowed driving time for each bus
      * @param busCap Capacity of each bus
      * @param numBus Number of buses
-     * @param size Size of the network
-     * @param count Number of runs
+     * @param parameter Parameter for the ZDRTPL model
+     * @param size Number of demand points
+     * @param count Number of the run
      * @throws IOException
      * @throws GRBException
      */
-    public static void runFullRTPL(Integer[] nominalDemand, Integer[] highDemand,
+    public static void runZDRTPL(Integer[] nominalDemand, Integer[] lowDemand, Integer[] highDemand,
     int[] shelterCapacities, String walkingTimesPath, String drivingTimesPath, int longestWalk, int maxT,
-    int busCap, int numBus, int size, int count) throws IOException, GRBException {
+    int busCap, int numBus, double parameter, int size, int count) throws IOException, GRBException {
+        
+        /* types of nodes in the network:
+        1 = Residential
+        2 = Industrial
+        3 = Leisure
+        4 = Office
+        5 = Commerical */
+        int[] types = {1, 2, 3, 4, 5};
+        // int[] assignment = new int[nominalDemand.length];
+
+        // for (int i = 0; i < nominalDemand.length; i++) {
+        //         if (i < 10) {
+        //             assignment[i] = 1;
+        //         } else if (i < 21) {
+        //             assignment[i] = 2;
+        //         } else if (i < 30) {
+        //             assignment[i] = 3;
+        //         } else if (i < 40) {
+        //             assignment[i] = 4;
+        //         } else {
+        //             assignment[i] = 5;
+        //     }
+        // }
+        int[] assignment = {4, 4, 3, 3, 1, 4, 4, 4, 3, 3, 1, 4, 4, 2, 4};
         
         // Get the walking times
         int[][] walkingTimesMatrix = helper.getTimesMatrix(walkingTimesPath, size);
@@ -417,220 +442,149 @@ public class RTPL {
         // Incorporate demand uncertainty in the model
         List<Integer[]> demandVectors = new ArrayList<Integer[]>();
         demandVectors.add(nominalDemand);
+        demandVectors.add(lowDemand);
         demandVectors.add(highDemand);
-
-        for (int pess = 0; pess <= 15; pess++) {
-            List<Integer[]> selectedDemandVectors = new ArrayList<Integer[]>();
-            selectedDemandVectors.add(nominalDemand);
-            // Create the model
-            RTPL rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-            demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
-
-            long startTime = System.nanoTime();
-
-            rtpl.solve();
-            
-            WCD wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-            busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-            selectedDemandVectors, shelterCapacities);  
-
-            double excessDemand = wcd.getObjective(); // solve WCD
-
-            while (excessDemand > 0) {
-                Integer[] newDemand = new Integer[nominalDemand.length];
-
-                for (int i = 0; i < nominalDemand.length; i++) {
-                    newDemand[i] = (int) wcd.demand[i].get(GRB.DoubleAttr.X);
-                }
-                selectedDemandVectors.add(newDemand);
-
-                rtpl.dispose();
-                rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-                demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
-
-                rtpl.solve();
-
-                wcd.dispose();
-                wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-                busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-                selectedDemandVectors, shelterCapacities);
-
-                excessDemand = wcd.getObjective();
-            }
-
-            long endTime = System.nanoTime();
-            long duration = (endTime - startTime) / 1_000_000; // Convert to milliseconds
-
-            rtpl.writeToExcel(duration, count);
-            rtpl.dispose();
-        }
-    }
-    
-    /**
-     * Runs the RTPL model with demand uncertainty 1 time for 1 pessimism value
-     * @param nominalDemand Array of nominal demand values
-     * @param highDemand Array of high demand values 
-     * @param shelterCapacities Array of shelter capacities
-     * @param walkingTimesPath Path to the walking times file
-     * @param drivingTimesPath Path to the driving times file
-     * @param longestWalk Maximum walking distance
-     * @param maxT Maximum driving time for the buses
-     * @param busCap Capacity of each bus
-     * @param numBus Number of buses
-     * @param pess Pessimism value
-     * @param size Size of the network
-     * @throws IOException
-     * @throws GRBException
-     */
-    public static void runRTPL(Integer[] nominalDemand, Integer[] highDemand,
-    int[] shelterCapacities, String walkingTimesPath, String drivingTimesPath, int longestWalk, int maxT,
-    int busCap, int numBus, int pess, int size) throws IOException, GRBException {
-        // Get the walking times
-        int[][] walkingTimesMatrix = helper.getTimesMatrix(walkingTimesPath, size);
-
-        // Get the driving times
-        int[][] drivingTimesMatrix = helper.getTimesMatrix(drivingTimesPath, size);
-        int[][] timesDPtoShelters = helper.getTimesDPToSheltersRD(drivingTimesMatrix, size);
-
-        // Incorporate demand uncertainty in the model
-        List<Integer[]> demandVectors = new ArrayList<Integer[]>();
-        demandVectors.add(nominalDemand);
-        demandVectors.add(highDemand);
-
 
         List<Integer[]> selectedDemandVectors = new ArrayList<Integer[]>();
         selectedDemandVectors.add(nominalDemand);
 
         // Create the model
-        RTPL rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-        demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
+        ZDRTPL zdrtpl = new ZDRTPL(longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+        demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap, parameter);
 
         long startTime = System.nanoTime();
 
-        rtpl.solve();
+        zdrtpl.solve();
         
-        WCD wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-        busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-        selectedDemandVectors, shelterCapacities);  
+        ZDWCD zdwcd = new ZDWCD(zdrtpl.isPickUpLocation, zdrtpl.isClosestPickUp, zdrtpl.trips,
+        busCap, numBus, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+        selectedDemandVectors, shelterCapacities, types, assignment, parameter);
 
-        double excessDemand = wcd.getObjective(); // solve WCD
+        double excessDemand = zdwcd.getObjective(); // solve WCD
 
         while (excessDemand > 0) {
             Integer[] newDemand = new Integer[nominalDemand.length];
 
             for (int i = 0; i < nominalDemand.length; i++) {
-                newDemand[i] = (int) wcd.demand[i].get(GRB.DoubleAttr.X);
+                newDemand[i] = (int) zdwcd.demand[i].get(GRB.DoubleAttr.X);
             }
             selectedDemandVectors.add(newDemand);
 
-            rtpl.dispose();
-            
-            rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-            demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
+            zdrtpl.dispose();
 
-            rtpl.solve();
+            zdrtpl = new ZDRTPL(longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+            demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap, parameter);
 
-            wcd.dispose();
-            wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-            busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-            selectedDemandVectors, shelterCapacities);
+            zdrtpl.solve();
 
-            excessDemand = wcd.getObjective();
+            zdwcd.dispose();
+
+            zdwcd = new ZDWCD(zdrtpl.isPickUpLocation, zdrtpl.isClosestPickUp, zdrtpl.trips,
+            busCap, numBus, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+            selectedDemandVectors, shelterCapacities, types, assignment, parameter);
+               
+            excessDemand = zdwcd.getObjective();
         }
-        wcd.dispose();
-        rtpl.dispose();
         long endTime = System.nanoTime();
         long duration = (endTime - startTime) / 1_000_000; // Convert to milliseconds
 
-        System.out.println("Total time taken: " + duration + " ms");
+        zdrtpl.writeToExcel(duration, count);
+        zdrtpl.dispose();
     }
 
-    /**
-     * Runs the RTPL model with demand uncertainty 1 time for 1 pessimism value
-     * and multiple demand simulations, and reports the success rate
-     * @param nominalDemand Array of nominal demand values
-     * @param highDemand Array of high demand values 
-     * @param shelterCapacities Array of shelter capacities
-     * @param walkingTimesPath Path to the walking times file
-     * @param drivingTimesPath Path to the driving times file
-     * @param longestWalk Maximum walking distance
-     * @param maxT Maximum driving time for the buses
-     * @param busCap Capacity of each bus
-     * @param numBus Number of buses
-     * @param pess Pessimism value
-     * @param size Size of the network
-     * @param demandSimulations List of dimulated demand values
-     * @throws IOException
-     * @throws GRBException
-     */
-    public static double runRTPLSim(Integer[] nominalDemand, Integer[] highDemand,
+    public static double runZDRTPLSim(Integer[] nominalDemand, Integer[] lowDemand, Integer[] highDemand,
     int[] shelterCapacities, String walkingTimesPath, String drivingTimesPath, int longestWalk, int maxT,
-    int busCap, int numBus, int pess, int size, List<Integer[]> demandSimulations) throws IOException, GRBException {
+    int busCap, int numBus, double parameter, int size, List<Integer[]> demandSimulations) throws IOException, GRBException {
+        
+        /* types of nodes in the network:
+        1 = Residential
+        2 = Industrial
+        3 = Leisure
+        4 = Office
+        5 = Commerical */
+        int[] types = {1, 2, 3, 4, 5};
+        // int[] assignment = new int[nominalDemand.length];
 
+        // for (int i = 0; i < nominalDemand.length; i++) {
+        //         if (i < 10) {
+        //             assignment[i] = 1;
+        //         } else if (i < 21) {
+        //             assignment[i] = 2;
+        //         } else if (i < 30) {
+        //             assignment[i] = 3;
+        //         } else if (i < 40) {
+        //             assignment[i] = 4;
+        //         } else {
+        //             assignment[i] = 5;
+        //     }
+        // }
+        int[] assignment = {4, 4, 3, 3, 1, 4, 4, 4, 3, 3, 1, 4, 4, 2, 4};
+        
         // Get the walking times
         int[][] walkingTimesMatrix = helper.getTimesMatrix(walkingTimesPath, size);
 
         // Get the driving times
         int[][] drivingTimesMatrix = helper.getTimesMatrix(drivingTimesPath, size);
-        int[][] timesDPtoShelters = helper.getTimesDPToSheltersRD(drivingTimesMatrix, shelterCapacities.length);
-        // int [][] timesDPtoShelters = helper.getTimesDPToSheltersSF(drivingTimesMatrix);
+        int[][] timesDPtoShelters = helper.getTimesDPToSheltersSF(drivingTimesMatrix);
+        // int[][] timesDPtoShelters = helper.getTimesDPToSheltersRD(drivingTimesMatrix, shelterCapacities.length);
 
         // Incorporate demand uncertainty in the model
         List<Integer[]> demandVectors = new ArrayList<Integer[]>();
         demandVectors.add(nominalDemand);
+        demandVectors.add(lowDemand);
         demandVectors.add(highDemand);
-
 
         List<Integer[]> selectedDemandVectors = new ArrayList<Integer[]>();
         selectedDemandVectors.add(nominalDemand);
 
         // Create the model
-        RTPL rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-        demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
+        ZDRTPL zdrtpl = new ZDRTPL(longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+        demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap, parameter);
 
-        rtpl.solve();
+        zdrtpl.solve();
+        
+        ZDWCD zdwcd = new ZDWCD(zdrtpl.isPickUpLocation, zdrtpl.isClosestPickUp, zdrtpl.trips,
+        busCap, numBus, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+        selectedDemandVectors, shelterCapacities, types, assignment, parameter);
 
-        WCD wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-        busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-        selectedDemandVectors, shelterCapacities);  
-
-        double excessDemand = wcd.getObjective(); // solve WCD
+        double excessDemand = zdwcd.getObjective(); // solve WCD
 
         while (excessDemand > 0) {
             Integer[] newDemand = new Integer[nominalDemand.length];
 
             for (int i = 0; i < nominalDemand.length; i++) {
-                newDemand[i] = (int) wcd.demand[i].get(GRB.DoubleAttr.X);
+                newDemand[i] = (int) zdwcd.demand[i].get(GRB.DoubleAttr.X);
             }
             selectedDemandVectors.add(newDemand);
 
-            rtpl.dispose();
-            
-            rtpl = new RTPL(longestWalk, maxT, timesDPtoShelters, pess, walkingTimesMatrix,
-            demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap);
+            zdrtpl.dispose();
 
-            rtpl.solve();
+            zdrtpl = new ZDRTPL(longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+            demandVectors, selectedDemandVectors, shelterCapacities, numBus, busCap, parameter);
 
-            wcd.dispose();
-            wcd = new WCD(rtpl.isPickUpLocation, rtpl.isClosestPickUp, rtpl.trips,
-            busCap, numBus, pess, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
-            selectedDemandVectors, shelterCapacities);
+            zdrtpl.solve();
 
-            excessDemand = wcd.getObjective();
+            zdwcd.dispose();
+
+            zdwcd = new ZDWCD(zdrtpl.isPickUpLocation, zdrtpl.isClosestPickUp, zdrtpl.trips,
+            busCap, numBus, demandVectors, longestWalk, maxT, timesDPtoShelters, walkingTimesMatrix,
+            selectedDemandVectors, shelterCapacities, types, assignment, parameter);
+               
+            excessDemand = zdwcd.getObjective();
         }
 
-        int[][] isClosestPickUp = new int[rtpl.numDP][rtpl.numDP];
-        for (int i = 0; i < rtpl.numDP; i++) {
-            for (int p = 0; p < rtpl.numDP; p++) {
-                isClosestPickUp[i][p] = (int) rtpl.isClosestPickUp[i][p].get(GRB.DoubleAttr.X);
+        int[][] isClosestPickUp = new int[zdrtpl.numDP][zdrtpl.numDP];
+        for (int i = 0; i < zdrtpl.numDP; i++) {
+            for (int p = 0; p < zdrtpl.numDP; p++) {
+                isClosestPickUp[i][p] = (int) zdrtpl.isClosestPickUp[i][p].get(GRB.DoubleAttr.X);
             }
         }
 
-        int[][][] trips = new int[rtpl.numBus][rtpl.numDP][rtpl.numSh];
-        for (int b = 0; b < rtpl.numBus; b++) {
-            for (int i = 0; i < rtpl.numDP; i++) {
-                for (int j = 0; j < rtpl.numSh; j++) {
-                    trips[b][i][j] = (int) rtpl.trips[b][i][j].get(GRB.DoubleAttr.X);
+        int[][][] trips = new int[zdrtpl.numBus][zdrtpl.numDP][zdrtpl.numSh];
+        for (int b = 0; b < zdrtpl.numBus; b++) {
+            for (int i = 0; i < zdrtpl.numDP; i++) {
+                for (int j = 0; j < zdrtpl.numSh; j++) {
+                    trips[b][i][j] = (int) zdrtpl.trips[b][i][j].get(GRB.DoubleAttr.X);
                 }
             }
         }
@@ -638,13 +592,13 @@ public class RTPL {
         List<Integer[]> accDemandsSim = new ArrayList<Integer[]>();
         
         for (int k = 0; k < demandSimulations.size(); k++) {
-            Integer[] accDemandSim = new Integer[rtpl.numDP];
+            Integer[] accDemandSim = new Integer[zdrtpl.numDP];
 
-            for (int i = 0; i < rtpl.numDP; i++) {
+            for (int i = 0; i < zdrtpl.numDP; i++) {
                 accDemandSim[i] = 0;
             }
-            for (int i = 0; i < rtpl.numDP; i++) {
-                for (int j = 0; j < rtpl.numDP; j ++) {
+            for (int i = 0; i < zdrtpl.numDP; i++) {
+                for (int j = 0; j < zdrtpl.numDP; j ++) {
                     if (isClosestPickUp[i][j] == 1) {
                         accDemandSim[i] += demandSimulations.get(k)[j];
                     }    
@@ -659,13 +613,13 @@ public class RTPL {
             int accSimDemand = 0;
             boolean fail = false;
 
-            for (int i = 0; i < rtpl.numDP; i++) {
+            for (int i = 0; i < zdrtpl.numDP; i++) {
                 accSimDemand = accDemandsSim.get(k)[i];
                 int actualCapacity = 0;
 
-                for (int j = 0; j < rtpl.numSh; j++) {
-                    for (int b = 0; b < rtpl.numBus; b++) {
-                        actualCapacity += rtpl.busCap * trips[b][i][j];
+                for (int j = 0; j < zdrtpl.numSh; j++) {
+                    for (int b = 0; b < zdrtpl.numBus; b++) {
+                        actualCapacity += zdrtpl.busCap * trips[b][i][j];
                     }
                 }
                 if (accSimDemand > actualCapacity) {
@@ -676,12 +630,12 @@ public class RTPL {
                 failures++;
             }
         }
+
         double successRate = (1 - (failures / (double) demandSimulations.size())) * 100;
+        zdrtpl.dispose();
+        zdwcd.dispose();
 
-        wcd.dispose();
-        rtpl.dispose();
-
-        return successRate; 
+        return successRate;
     }
 }
     
